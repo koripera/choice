@@ -108,7 +108,7 @@ style = Style.from_dict({
 
 app = Application(
 	layout=layout,
-	full_screen=True,
+	full_screen=False,
 	key_bindings=kb,
 	style=style,
 )
