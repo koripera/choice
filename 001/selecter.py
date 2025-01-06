@@ -11,6 +11,8 @@ from prompt_toolkit.layout.controls import FormattedTextControl
 from prompt_toolkit.layout.containers import Window
 from prompt_toolkit.application import get_app
 
+from prompt_toolkit.widgets import TextArea
+
 """
 まとめたlayoutを返す
 
@@ -18,6 +20,32 @@ choice
 ﾘｽﾄ･ﾀﾌﾟﾙ、その要素のstrで表示、要素を返す
 辞書、そのkeyで表示、valを返す
 """
+
+from io import StringIO
+import sys
+
+# 標準出力をリダイレクトするクラス
+class StdoutRedirector:
+    def __init__(self, output_control):
+        self.output_control = output_control
+        self._original_stdout = sys.stdout
+        self.buffer = StringIO()
+
+    def write(self, text):
+        self.buffer.write(text)
+        self.output_control.text += text  # フォーカス可能な出力ウィンドウにテキスト追加
+
+    def flush(self):
+        self.buffer.flush()
+
+    def __enter__(self):
+        sys.stdout = self
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        sys.stdout = self._original_stdout
+
+
 
 class common():
 	pass
@@ -28,6 +56,19 @@ def selecter(choices):
 		inner = [Row(key) for key in choices.keys()]
 	else:
 		inner = [Row(e) for e in choices]
+
+
+	tarea=TextArea(
+		text="aaaaa",
+		read_only=True,
+		scrollbar=True,
+		focusable=True,
+	)
+
+	common.output_area=tarea
+
+
+	#inner = [tarea,]+inner
 
 	layout = HSplit(
 		inner,
@@ -55,10 +96,17 @@ def defaults_bind():
 	
 	@kb.add("enter")
 	def _(event):
-		print(get_app().layout.current_control)
-		print(get_app().layout.current_window)
-		print(get_app().layout.current_buffer)
-		print(get_app().layout.container.children)
+		get_app().layout = selecter(["ddd","eee","fff"])
+		"""
+		with StdoutRedirector(common.output_area):
+			flush()
+			print(get_app().layout.current_control)
+			print(get_app().layout.current_window)
+			print(get_app().layout.current_buffer)
+			print(get_app().layout.container.children)
+		buffer = common.output_area.buffer
+		buffer.cursor_position = len(buffer.text)
+		"""
 	
 	@kb.add("j")
 	def _(event):
