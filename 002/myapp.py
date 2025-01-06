@@ -1,7 +1,8 @@
 from prompt_toolkit.application import Application
 
-log = []
-
+log_layout = []
+log_contents = []
+log_label = []
 
 def run(layout):
 	app = Application(
