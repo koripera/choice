@@ -1,9 +1,8 @@
 import myapp
 from prompt_toolkit.application import get_app_or_none
 
-from prompt_toolkit.key_binding import KeyBindings
-from prompt_toolkit.widgets import Label
-from prompt_toolkit.layout.containers import Window
+from prompt_toolkit.key_binding import KeyBindings,merge_key_bindings,DynamicKeyBindings
+from prompt_toolkit.widgets import Label,HorizontalLine,TextArea
 from prompt_toolkit.layout import Layout, HSplit, Window
 from prompt_toolkit.layout.controls import FormattedTextControl
 
@@ -13,44 +12,146 @@ from prompt_toolkit.application import get_app
 from io import StringIO
 import sys
 
+"""
+focus_next()は末端のフォーカスを順繰りに移動
+focus(obj)で絶対的に指定したい
+"""
+
 class Selecter:
 	def __init__(self,choices):
+		#self.rowlist --選択肢の行のwindowﾘｽﾄ
 		#self.items　--辞書型で名前と実体を管理
 		if type(choices) == dict:
-			inner = [Row(key) for key in choices.keys()]
+			self.rowlist = [Row(key) for key in choices.keys()]
 			self.items = choices
 		else:
-			inner = [Row(e) for e in choices]
+			self.rowlist = [Row(e) for e in choices]
 			self.items = {str(e):e for e in choices}
 
 		#self.label --文字の表示領域
-		self.label = Label(text="aaa")
-		
-		inner = [self.label,]+inner
+		#情報を表示するlayout
+		self.label = TextArea(text="aaa") #Label(text="aaa")
+		self.info = HSplit(
+			[self.label,HorizontalLine()],
+		)
 
+		#選択肢だけのlayout
+		self.sel = HSplit(
+			self.rowlist,
+		)
+
+
+		#総合のlayout
 		layout = HSplit(
-			inner,
-			key_bindings = defaults_bind(),
+			[self.info,self.sel],
+			key_bindings = DynamicKeyBindings(self.main_kb),
 		)
 
 		#self.layout --app上の構成
 		self.layout = Layout(layout)
 
-		if 0:
-			#自身を記録に追加
-			myapp.log.append(self)
+		#主となるコンテンツはtabで切り替えたい
+		self.kb = [
+			(self.info , self._info_keys()    ),
+			(self.sel  , self._selecter_keys() ),
+		]
+		
+		self.mainindex = 0 #
+		self.rowindex  = 0 #選択肢の選択行
 
-			#appが起動してなければ、自身のlayoutで起動する
-			if get_app_or_none()==None:
-				myapp.run(layout=self.layout)
+	def main_kb(self):
+		return merge_key_bindings([
+			self._common_kb(),
+			self.kb[self.mainindex][1],
+		])
+
+	def _common_kb(self):
+		kb = KeyBindings()
+
+		@kb.add("tab")
+		def _(event):
+			self.mainindex+=1
+			if self.mainindex >= len(self.kb):
+				self.mainindex = 0
+
+			if self.mainindex == 0:
+				event.app.layout.focus(self.label)
+			elif self.mainindex == 1:
+				event.app.layout.focus(self.rowlist[self.rowindex])
+
+		@kb.add("q")
+		def _(event):
+			event.app.exit()
+
+		return kb
+
+	def _info_keys(self):
+		kb = KeyBindings()
+
+		
+
+		return kb
+
+	def _selecter_keys(self):
+		kb = KeyBindings()
+
+		@kb.add("j")
+		def _(event):
+			self.rowindex+=1
+			if self.rowindex >= len(self.rowlist):
+				self.rowindex=0
+			event.app.layout.focus(
+				self.rowlist[self.rowindex]
+			)
+
+		@kb.add("k")
+		def _(event):
+			self.rowindex-=1
+			if self.rowindex < 0:
+				self.rowindex = len(self.rowlist)-1
+			event.app.layout.focus(
+				self.rowlist[self.rowindex]
+			)
+
+		@kb.add("enter")
+		def _(event):
+			#選択肢のﾃｷｽﾄを取る
+			txt = get_app().layout.current_control.text
+
+			#中身がselecter
+			if type((sel:=myapp.curselecter.items[txt])) is Selecter:
+				myapp.log.append(myapp.curselecter) #現を保存
+				myapp.curselecter = sel
+				get_app().layout = sel.layout
+				get_app().layout.focus(sel.sel)
+
+			#中身が関数等
+			elif callable( (func:=myapp.curselecter.items[txt])):
+				with StdoutRedirector(myapp.log[-1].label):
+					func()
+
+			#中身がテキスト
+			else:
+				myapp.curselecter.label.text=txt		
+		return kb
 
 	def run(self):
 		myapp.curselecter=self
 		myapp.run(layout=self.layout)	
+		return 
 
 
+class ringlist:
+	def __init__(self,l):
+		self.index = 0
+		self.max   = len(l)
+		self.list  = l
 
+	def next(self):
+		pass
 
+	def back(self):
+		pass
 
 
 
@@ -102,38 +203,23 @@ class StdoutRedirector:
     def __exit__(self, exc_type, exc_value, traceback):
         sys.stdout = self._original_stdout
 
-#layoutと選択肢の内容をmyappのlogに保存する
-def selecter(choices):
-	if type(choices) == dict:
-		inner = [Row(key) for key in choices.keys()]
-		myapp.log_contents.append(choices)
-	else:
-		inner = [Row(e) for e in choices]
-		myapp.log_contents.append({str(e):e for e in choices})
 
-	label = Label(text="aaa")
-	
-	myapp.log_label.append(label)
+def window_bind():
+	kb = KeyBindings()
 
-	inner = [label,]+inner
+	@kb.add("tab")
+	def _(event):
+		pass
 
-	layout = HSplit(
-		inner,
-		key_bindings = defaults_bind(),
-	)
-
-	layout = Layout(layout)
-
-	myapp.log_layout.append(layout)
-
-	if (app:=get_app_or_none())!=None:
-		app.layout = layout
-	else:
-		myapp.run(layout=layout)
+	return kb
 
 def defaults_bind():
 
 	kb = KeyBindings()
+
+	@kb.add("tab")
+	def _(event):
+		get_app().layout.container.focus_next()
 
 	@kb.add("enter")
 	def _(event):
@@ -145,6 +231,7 @@ def defaults_bind():
 			myapp.log.append(myapp.curselecter) #現を保存
 			myapp.curselecter = sel
 			get_app().layout = sel.layout
+			get_app().layout.focus(sel.sel)
 
 		#中身が関数等
 		elif callable( (func:=myapp.curselecter.items[txt])):
@@ -154,13 +241,6 @@ def defaults_bind():
 		#中身がテキスト
 		else:
 			myapp.curselecter.label.text=txt
-		if 0:
-			#実行可能なら、実行する
-			if callable( (func:=myapp.log[-1].items[txt]) ):
-				with StdoutRedirector(myapp.log[-1].label):
-					func()
-			else:
-				myapp.log[-1].label.text = txt 
 
 	@kb.add("j")
 	def _(event):
