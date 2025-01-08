@@ -9,13 +9,13 @@ log_layout = []
 log_contents = []
 log_label = []
 
-def run(layout):
+def run(layout,pre_run=None):
 	app = Application(
 		layout=layout,
 		full_screen = True,
 	)
 
-	app.run()
+	app.run(pre_run=pre_run)
 
 def initial_focus(app):
 	app.layout.focus_next()

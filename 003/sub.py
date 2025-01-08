@@ -127,6 +127,7 @@ class Selecter:
 
 			#中身が関数等
 			elif callable( (func:=myapp.curselecter.items[txt])):
+				myapp.log[-1].label.text=""
 				with StdoutRedirector(myapp.log[-1].label):
 					func()
 
@@ -137,8 +138,16 @@ class Selecter:
 
 	def run(self):
 		myapp.curselecter=self
-		myapp.run(layout=self.layout)	
+		myapp.run(layout=self.layout,pre_run=self.firstfocus)	
 		return 
+
+	def firstfocus(self):
+		#print(self.rowlist[0].__pt_container__().content)
+		myapp.mainselecter=self
+		myapp.curselecter=self
+		myapp.log.append(myapp.curselecter)
+		self.mainindex = 1
+		get_app().layout.focus(self.rowlist[0])
 
 
 class ringlist:
@@ -285,11 +294,11 @@ Selecter([
 	"uuu",
 ])
 """
-
+"""
 Selecter({
 	"aaa":"aaa",
 	"iii":"iii",
 	"uuu":"uuu",
 	"func":Selecter(["aaa",])
 }).run()
-
+"""
