@@ -129,7 +129,9 @@ class Selecter:
 			elif callable( (func:=myapp.curselecter.items[txt])):
 				myapp.log[-1].label.text=""
 				with StdoutRedirector(myapp.log[-1].label):
-					func()
+					tmp=func()
+				if tmp!=None:
+					myapp.log[-1].label.text+=str(tmp)
 
 			#中身がテキスト
 			else:
