@@ -96,10 +96,7 @@ class Row:
 		text: text to print
 	"""
 
-	def __init__(
-		self,
-		text: str,
-	) -> None:
+	def __init__(self,text: str,) -> None:
 		"""Initialize the widget."""
 		self.text = text
 		self.control = FormattedTextControl(

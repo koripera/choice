@@ -1,16 +1,29 @@
-import myapp
-from prompt_toolkit.application import get_app_or_none
-
-from prompt_toolkit.key_binding import KeyBindings,merge_key_bindings,DynamicKeyBindings
-from prompt_toolkit.widgets import Label,HorizontalLine,TextArea
-from prompt_toolkit.layout import Layout, HSplit, Window
-from prompt_toolkit.layout.controls import FormattedTextControl
-
-from prompt_toolkit.application import get_app
-
-
 from io import StringIO
 import sys
+
+from prompt_toolkit.application import (
+	get_app,
+	get_app_or_none,
+)
+from prompt_toolkit.layout import (
+	Layout,
+	HSplit,
+	Window,
+)
+from prompt_toolkit.layout.controls import FormattedTextControl
+from prompt_toolkit.key_binding import (
+	KeyBindings,
+	merge_key_bindings,
+	DynamicKeyBindings,
+)
+from prompt_toolkit.widgets import (
+	Label,
+	HorizontalLine,
+	TextArea,
+)
+
+import myapp
+
 
 """
 focus_next()は末端のフォーカスを順繰りに移動
@@ -18,7 +31,7 @@ focus(obj)で絶対的に指定したい
 """
 
 class Selecter:
-	def __init__(self,choices):
+	def __init__(self,choices) -> None:
 		#self.rowlist --選択肢の行のwindowﾘｽﾄ
 		#self.items　--辞書型で名前と実体を管理
 		if type(choices) == dict:
@@ -59,13 +72,13 @@ class Selecter:
 		self.mainindex = 0 #
 		self.rowindex  = 0 #選択肢の選択行
 
-	def main_kb(self):
+	def main_kb(self) -> KeyBindings:
 		return merge_key_bindings([
 			self._common_kb(),
 			self.kb[self.mainindex][1],
 		])
 
-	def _common_kb(self):
+	def _common_kb(self) -> KeyBindings:
 		kb = KeyBindings()
 
 		@kb.add("tab")
@@ -79,22 +92,21 @@ class Selecter:
 			elif self.mainindex == 1:
 				event.app.layout.focus(self.rowlist[self.rowindex])
 
-		@kb.add("q")
+		@kb.add("escape", eager=True)
 		def _(event):
 			event.app.exit()
 
 		return kb
 
-	def _info_keys(self):
+	def _info_keys(self) -> KeyBindings:
 		kb = KeyBindings()
-
 		
-
 		return kb
 
-	def _selecter_keys(self):
+	def _selecter_keys(self) -> KeyBindings:
 		kb = KeyBindings()
 
+		@kb.add("down")
 		@kb.add("j")
 		def _(event):
 			self.rowindex+=1
@@ -104,6 +116,7 @@ class Selecter:
 				self.rowlist[self.rowindex]
 			)
 
+		@kb.add("up")
 		@kb.add("k")
 		def _(event):
 			self.rowindex-=1
@@ -151,48 +164,6 @@ class Selecter:
 		self.mainindex = 1
 		get_app().layout.focus(self.rowlist[0])
 
-
-class ringlist:
-	def __init__(self,l):
-		self.index = 0
-		self.max   = len(l)
-		self.list  = l
-
-	def next(self):
-		pass
-
-	def back(self):
-		pass
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # 標準出力をリダイレクトするクラス
 class StdoutRedirector:
     def __init__(self, output_control):
@@ -213,59 +184,6 @@ class StdoutRedirector:
 
     def __exit__(self, exc_type, exc_value, traceback):
         sys.stdout = self._original_stdout
-
-
-def window_bind():
-	kb = KeyBindings()
-
-	@kb.add("tab")
-	def _(event):
-		pass
-
-	return kb
-
-def defaults_bind():
-
-	kb = KeyBindings()
-
-	@kb.add("tab")
-	def _(event):
-		get_app().layout.container.focus_next()
-
-	@kb.add("enter")
-	def _(event):
-		#選択肢のﾃｷｽﾄを取る
-		txt = get_app().layout.current_control.text
-
-		#中身がselecter
-		if type((sel:=myapp.curselecter.items[txt])) is Selecter:
-			myapp.log.append(myapp.curselecter) #現を保存
-			myapp.curselecter = sel
-			get_app().layout = sel.layout
-			get_app().layout.focus(sel.sel)
-
-		#中身が関数等
-		elif callable( (func:=myapp.curselecter.items[txt])):
-			with StdoutRedirector(myapp.log[-1].label):
-				func()
-
-		#中身がテキスト
-		else:
-			myapp.curselecter.label.text=txt
-
-	@kb.add("j")
-	def _(event):
-		get_app().layout.focus_next()
-
-	@kb.add("k")
-	def _(event):
-		get_app().layout.focus_previous()
-
-	@kb.add("q", eager=True)
-	def _(event):
-		event.app.exit()
-
-	return kb
 
 class Row:
 #最終は__pt_container__で返すものでappに登録される。
@@ -289,18 +207,3 @@ class Row:
 	def __pt_container__(self) -> Window:
 		return self.window
 
-"""
-Selecter([
-	"aaa",
-	"iii",
-	"uuu",
-])
-"""
-"""
-Selecter({
-	"aaa":"aaa",
-	"iii":"iii",
-	"uuu":"uuu",
-	"func":Selecter(["aaa",])
-}).run()
-"""
