@@ -28,6 +28,9 @@ from . import myapp
 """
 focus_next()は末端のフォーカスを順繰りに移動
 focus(obj)で絶対的に指定したい
+
+func(Selecter())のような使い方をしたい
+menuクラスをつくる？
 """
 
 class Selecter:
@@ -39,7 +42,7 @@ class Selecter:
 			self.items = choices
 		else:
 			self.rowlist = [Row(e) for e in choices]
-			self.items = {str(e):e for e in choices}
+			self.items = {str(e) if not callable(e) else e.__name__ :e for e in choices}
 
 		#self.label --文字の表示領域
 		#情報を表示するlayout
@@ -52,7 +55,6 @@ class Selecter:
 		self.sel = HSplit(
 			self.rowlist,
 		)
-
 
 		#総合のlayout
 		layout = HSplit(
@@ -69,9 +71,10 @@ class Selecter:
 			(self.sel  , self._selecter_keys() ),
 		]
 		
-		self.mainindex = 0 #
+		self.mainindex = 1 #
 		self.rowindex  = 0 #選択肢の選択行
 
+	#keybind{{{
 	def main_kb(self) -> KeyBindings:
 		return merge_key_bindings([
 			self._common_kb(),
@@ -131,10 +134,13 @@ class Selecter:
 			#選択肢のﾃｷｽﾄを取る
 			txt = get_app().layout.current_control.text
 
+			#with StdoutRedirector(myapp.log[-1].label):
+			#	print("aiueo")	
+
 			#中身がselecter
-			if type((sel:=myapp.curselecter.items[txt])) is Selecter:
-				myapp.log.append(myapp.curselecter) #現を保存
+			if type((sel:=myapp.curselecter.items[txt])) is type(self):
 				myapp.curselecter = sel
+				myapp.log.append(myapp.curselecter) #現を保存
 				get_app().layout = sel.layout
 				get_app().layout.focus(sel.sel)
 
@@ -142,26 +148,35 @@ class Selecter:
 			elif callable( (func:=myapp.curselecter.items[txt])):
 				myapp.log[-1].label.text=""
 				with StdoutRedirector(myapp.log[-1].label):
-					tmp=func()
-				if tmp!=None:
-					myapp.log[-1].label.text+=str(tmp)
+					func()
+					#if tmp!=None:
+					#	myapp.log[-1].label.text+=str(tmp)
 
 			#中身がテキスト
 			else:
-				myapp.curselecter.label.text=txt		
+				myapp.curselecter.label.text+=txt
+	
 		return kb
+	#}}}
 
 	def run(self):
-		myapp.curselecter=self
+		#終了用の選択肢を追加する
+		def exit():
+			get_app().exit()
+		self.rowlist = [Row("exit")]+self.rowlist
+		self.items   = {"exit":exit,**self.items}
+		self.sel.children = [e.__pt_container__() for e in self.rowlist]
+
+		#全体管理
+		myapp.mainselecter = self
+		myapp.curselecter  = self
+		myapp.log.append(myapp.curselecter)
+
 		myapp.run(layout=self.layout,pre_run=self.firstfocus)	
 		return 
 
 	def firstfocus(self):
-		#print(self.rowlist[0].__pt_container__().content)
-		myapp.mainselecter=self
-		myapp.curselecter=self
-		myapp.log.append(myapp.curselecter)
-		self.mainindex = 1
+		#self.mainindex = 1
 		get_app().layout.focus(self.rowlist[0])
 
 # 標準出力をリダイレクトするクラス
@@ -188,7 +203,7 @@ class StdoutRedirector:
 class Row:
 #最終は__pt_container__で返すものでappに登録される。
 	def __init__(self,text: str,) -> None:
-		self.text = str(text) if not callable(text) else "<lambda>"
+		self.text = str(text) if not callable(text) else text.__name__
 		self.control = FormattedTextControl(
 			self.text,
 			focusable=True,
