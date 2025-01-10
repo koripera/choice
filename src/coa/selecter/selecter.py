@@ -1,5 +1,6 @@
 from io import StringIO
 import sys
+from typing import Self,Any,Callable
 
 from prompt_toolkit.application import (
 	get_app,
@@ -33,32 +34,52 @@ func(Selecter())のような使い方をしたい
 menuクラスをつくる？
 """
 
-class Selecter:
-	def __init__(self,choices) -> None:
-		#self.rowlist --選択肢の行のwindowﾘｽﾄ
-		#self.items　--辞書型で名前と実体を管理
-		if type(choices) == dict:
-			self.rowlist = [Row(key) for key in choices.keys()]
-			self.items = choices
-		else:
-			self.rowlist = [Row(e) for e in choices]
-			self.items = {str(e) if not callable(e) else e.__name__ :e for e in choices}
+#選択valを返す
+def selecter(items):
+
+	return items[0]
+
+#Menuかcallableをvalに持って、選択で実行
+class Menu:
+	def __init__(
+		self,
+		items        : list[ tuple[ str,type[Self] | Callable[..., Any] ] ],      
+		message      : str = "",
+		)           -> None:
+
+		#前のmenuに戻る
+		def back():
+			myapp.log.pop(-1)
+			get_app().layout = myapp.log[-1].layout
+			get_app().layout.focus(myapp.log[-1].command)
+
+
+		#self.items 　--[(name,val)...]の選択するｺﾝﾃﾝﾂ
+		#self.rowlist --選択肢の行のwindowﾘｽﾄ	
+		self.items   = [("back",back),] + items
+		self.message = message    
+		self.rowlist = [Row(name) for name,val in self.items]
 
 		#self.label --文字の表示領域
 		#情報を表示するlayout
-		self.label = TextArea(text="aaa") #Label(text="aaa")
-		self.info = HSplit(
-			[self.label,HorizontalLine()],
-		)
+		self.console_area = TextArea(text="aaa")
+		self.message_area = Label(text=self.message)
+		
+		self.info_area = [
+			self.console_area,
+			HorizontalLine(),
+		]
+		if self.message!="":
+			self.info_area.append(self.message_area)
+
+		self.info = HSplit(self.info_area)
 
 		#選択肢だけのlayout
-		self.sel = HSplit(
-			self.rowlist,
-		)
+		self.command = HSplit(self.rowlist)
 
 		#総合のlayout
 		layout = HSplit(
-			[self.info,self.sel],
+			[self.info,self.command],
 			key_bindings = DynamicKeyBindings(self.main_kb),
 		)
 
@@ -67,8 +88,8 @@ class Selecter:
 
 		#主となるコンテンツはtabで切り替えたい
 		self.kb = [
-			(self.info , self._info_keys()    ),
-			(self.sel  , self._selecter_keys() ),
+			self._info_keys(),
+			self._selecter_keys(),
 		]
 		
 		self.mainindex = 1 #
@@ -78,7 +99,7 @@ class Selecter:
 	def main_kb(self) -> KeyBindings:
 		return merge_key_bindings([
 			self._common_kb(),
-			self.kb[self.mainindex][1],
+			self.kb[self.mainindex],
 		])
 
 	def _common_kb(self) -> KeyBindings:
@@ -134,27 +155,18 @@ class Selecter:
 			#選択肢のﾃｷｽﾄを取る
 			txt = get_app().layout.current_control.text
 
-			#with StdoutRedirector(myapp.log[-1].label):
-			#	print("aiueo")	
-
-			#中身がselecter
-			if type((sel:=myapp.curselecter.items[txt])) is type(self):
-				myapp.curselecter = sel
+			#中身がMenu
+			if type( (select_menu:=self.items[self.rowindex][1] )) is type(self):
+				myapp.curselecter = select_menu
 				myapp.log.append(myapp.curselecter) #現を保存
-				get_app().layout = sel.layout
-				get_app().layout.focus(sel.sel)
+				get_app().layout = select_menu.layout
+				get_app().layout.focus(select_menu.command)
 
 			#中身が関数等
-			elif callable( (func:=myapp.curselecter.items[txt])):
-				myapp.log[-1].label.text=""
-				with StdoutRedirector(myapp.log[-1].label):
-					func()
-					#if tmp!=None:
-					#	myapp.log[-1].label.text+=str(tmp)
-
-			#中身がテキスト
-			else:
-				myapp.curselecter.label.text+=txt
+			elif callable( (select_func:= self.items[self.rowindex][1]) ):
+				self.console_area.text=""
+				with StdoutRedirector(self.console_area):
+					select_func()
 	
 		return kb
 	#}}}
@@ -163,9 +175,9 @@ class Selecter:
 		#終了用の選択肢を追加する
 		def exit():
 			get_app().exit()
-		self.rowlist = [Row("exit")]+self.rowlist
-		self.items   = {"exit":exit,**self.items}
-		self.sel.children = [e.__pt_container__() for e in self.rowlist]
+		self.rowlist[0] = Row("exit")
+		self.items[0]   = ("exit", exit)
+		self.command.children = [e.__pt_container__() for e in self.rowlist]
 
 		#全体管理
 		myapp.mainselecter = self
