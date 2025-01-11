@@ -25,68 +25,82 @@ from prompt_toolkit.widgets import (
 
 from . import myapp
 
-import threading
-
-#選択valを返す
-def selecter(items,message=""):
-	control = _Selecter(items,message)
-
-	control.run()
-	
-	return control.result
-
-class _Selecter:
+#Menuかcallableをvalに持って、選択で実行
+class Menu:
 	def __init__(
 		self,
 		items        : list[ tuple[ str,type[Self] | Callable[..., Any] ] ],      
 		message      : str = "",
 		)           -> None:
 
+		#前のmenuに戻る
+		def back():
+			myapp.log.pop(-1)
+			get_app().layout = myapp.log[-1].layout
+			get_app().layout.focus(myapp.log[-1].command)
+
+
 		#self.items 　--[(name,val)...]の選択するｺﾝﾃﾝﾂ
 		#self.rowlist --選択肢の行のwindowﾘｽﾄ	
-		self.items   = items
+		self.items   = [("back",back),] + items
 		self.message = message    
 		self.rowlist = [Row(name) for name,val in self.items]
 
+		#self.label --文字の表示領域
 		#情報を表示するlayout
+		self.console_area = TextArea(text="aaa")
 		self.message_area = Label(text=self.message)
 		
+		self.info_area = [
+			self.console_area,
+			HorizontalLine(),
+		]
+		if self.message!="":
+			self.info_area.append(self.message_area)
+
+		self.info = HSplit(self.info_area)
+
 		#選択肢だけのlayout
 		self.command = HSplit(self.rowlist)
 
 		#総合のlayout
 		layout = HSplit(
-			[self.message_area,self.command],
+			[self.info,self.command],
 			key_bindings = DynamicKeyBindings(self.main_kb),
 		)
 
 		#self.layout --app上の構成
 		self.layout = Layout(layout)
+
+		#主となるコンテンツはtabで切り替えたい
+		self.kb = [
+			self._info_keys(),
+			self._selecter_keys(),
+		]
 		
+		self.mainindex = 1 #
 		self.rowindex  = 0 #選択肢の選択行
-
-		self.oldlayout = None #直前のlayout(単独で開いているか)
-		self.result = None
-
-	def run(self):
-		#ｱﾌﾟﾘの起動状態を取る
-		if (app:=get_app_or_none()) != None:
-			#layoutを保存して置き換え
-			self.oldlayout = app.layout
-			app.layout = self.layout
-		else:
-			myapp.run(layout=self.layout)
-			
 
 	#keybind{{{
 	def main_kb(self) -> KeyBindings:
 		return merge_key_bindings([
 			self._common_kb(),
-			self._selecter_keys(),
+			self.kb[self.mainindex],
 		])
 
 	def _common_kb(self) -> KeyBindings:
 		kb = KeyBindings()
+
+		@kb.add("tab")
+		def _(event):
+			self.mainindex+=1
+			if self.mainindex >= len(self.kb):
+				self.mainindex = 0
+
+			if self.mainindex == 0:
+				event.app.layout.focus(self.label)
+			elif self.mainindex == 1:
+				event.app.layout.focus(self.rowlist[self.rowindex])
 
 		@kb.add("escape", eager=True)
 		def _(event):
@@ -124,20 +138,44 @@ class _Selecter:
 
 		@kb.add("enter")
 		def _(event):
-			self.result = self.items[self.rowindex][1]
-			
-			if self.oldlayout == None:
-				event.app.exit()
-			else:
-				event.app.layout = self.oldlayout
-					
+			#選択肢のﾃｷｽﾄを取る
+			txt = get_app().layout.current_control.text
 
+			#中身がMenu
+			if type( (select_menu:=self.items[self.rowindex][1] )) is type(self):
+				myapp.curselecter = select_menu
+				myapp.log.append(myapp.curselecter) #現を保存
+				get_app().layout = select_menu.layout
+				get_app().layout.focus(select_menu.command)
 
+			#中身が関数等
+			elif callable( (select_func:= self.items[self.rowindex][1]) ):
+				self.console_area.text=""
+				with StdoutRedirector(self.console_area):
+					select_func()
+	
 		return kb
-	#}}}keybind
+	#}}}
 
+	def run(self):
+		#終了用の選択肢を追加する
+		def exit():
+			get_app().exit()
+		self.rowlist[0] = Row("exit")
+		self.items[0]   = ("exit", exit)
+		self.command.children = [e.__pt_container__() for e in self.rowlist]
 
+		#全体管理
+		myapp.mainselecter = self
+		myapp.curselecter  = self
+		myapp.log.append(myapp.curselecter)
 
+		myapp.run(layout=self.layout,pre_run=self.firstfocus)	
+		return 
+
+	def firstfocus(self):
+		#self.mainindex = 1
+		get_app().layout.focus(self.rowlist[0])
 
 # 標準出力をリダイレクトするクラス
 class StdoutRedirector:
