@@ -29,9 +29,11 @@ import threading
 
 #選択valを返す
 def selecter(items,message=""):
-	control = _Selecter(items,message)
-
+	event = threading.Event()
+	control = _Selecter(items,message,event=event)
 	control.run()
+
+	event.wait()
 	
 	return control.result
 
@@ -40,7 +42,10 @@ class _Selecter:
 		self,
 		items        : list[ tuple[ str,type[Self] | Callable[..., Any] ] ],      
 		message      : str = "",
+		event=None,
 		)           -> None:
+
+		self.event = event
 
 		#self.items 　--[(name,val)...]の選択するｺﾝﾃﾝﾂ
 		#self.rowlist --選択肢の行のwindowﾘｽﾄ	
@@ -54,9 +59,12 @@ class _Selecter:
 		#選択肢だけのlayout
 		self.command = HSplit(self.rowlist)
 
+		if self.message=="":inner=[self.command]
+		else               :inner=[self.message_area,self.command]
+
 		#総合のlayout
 		layout = HSplit(
-			[self.message_area,self.command],
+			inner,
 			key_bindings = DynamicKeyBindings(self.main_kb),
 		)
 
@@ -125,6 +133,7 @@ class _Selecter:
 		@kb.add("enter")
 		def _(event):
 			self.result = self.items[self.rowindex][1]
+			self.event.set()
 			
 			if self.oldlayout == None:
 				event.app.exit()

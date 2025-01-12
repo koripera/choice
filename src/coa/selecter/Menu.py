@@ -1,5 +1,7 @@
 from io import StringIO
 import sys
+import asyncio
+import threading
 from typing import Self,Any,Callable
 
 from prompt_toolkit.application import (
@@ -22,6 +24,8 @@ from prompt_toolkit.widgets import (
 	HorizontalLine,
 	TextArea,
 )
+
+from prompt_toolkit.eventloop import call_soon_threadsafe
 
 from . import myapp
 
@@ -98,7 +102,7 @@ class Menu:
 				self.mainindex = 0
 
 			if self.mainindex == 0:
-				event.app.layout.focus(self.label)
+				event.app.layout.focus(self.info)
 			elif self.mainindex == 1:
 				event.app.layout.focus(self.rowlist[self.rowindex])
 
@@ -151,8 +155,10 @@ class Menu:
 			#中身が関数等
 			elif callable( (select_func:= self.items[self.rowindex][1]) ):
 				self.console_area.text=""
-				with StdoutRedirector(self.console_area):
-					select_func()
+				loop = asyncio.new_event_loop()
+
+				thread1 = threading.Thread(target=self.task,args=(loop,select_func), daemon=True)
+				thread1.start()
 	
 		return kb
 	#}}}
@@ -173,6 +179,15 @@ class Menu:
 		myapp.run(layout=self.layout,pre_run=self.firstfocus)	
 		return 
 
+	def task(self,loop,func):
+		asyncio.set_event_loop(loop)
+		loop.run_until_complete(self.execute(func))
+
+	async def execute(self,func):
+		with StdoutRedirector(self.console_area):
+			func()
+		get_app().invalidate()
+
 	def firstfocus(self):
 		#self.mainindex = 1
 		get_app().layout.focus(self.rowlist[0])
@@ -186,7 +201,12 @@ class StdoutRedirector:
 
     def write(self, text):
         self.buffer.write(text)
-        self.output_control.text += text  # フォーカス可能な出力ウィンドウにテキスト追加
+        # スレッドセーフにUIを更新
+        call_soon_threadsafe(lambda: self.update_output(text))
+
+    def update_output(self, text):
+        # フォーカス可能な出力ウィンドウにテキスト追加
+        self.output_control.text += text
 
     def flush(self):
         self.buffer.flush()
