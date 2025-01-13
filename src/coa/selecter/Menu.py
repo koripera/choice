@@ -12,6 +12,7 @@ from prompt_toolkit.layout import (
 	Layout,
 	HSplit,
 	Window,
+	ScrollablePane,
 )
 from prompt_toolkit.layout.controls import FormattedTextControl
 from prompt_toolkit.key_binding import (
@@ -66,10 +67,11 @@ class Menu:
 
 		#選択肢だけのlayout
 		self.command = HSplit(self.rowlist)
+		self.com = ScrollablePane(self.command,height=10)
 
 		#総合のlayout
 		layout = HSplit(
-			[self.info,self.command],
+			[self.info,self.com],
 			key_bindings = DynamicKeyBindings(self.main_kb),
 		)
 
@@ -154,7 +156,7 @@ class Menu:
 
 			#中身が関数等
 			elif callable( (select_func:= self.items[self.rowindex][1]) ):
-				self.console_area.text=""
+				#self.console_area.text=""
 				loop = asyncio.new_event_loop()
 
 				thread1 = threading.Thread(target=self.task,args=(loop,select_func), daemon=True)
@@ -186,6 +188,8 @@ class Menu:
 	async def execute(self,func):
 		with StdoutRedirector(self.console_area):
 			func()
+		lines = self.console_area.document.text.splitlines()
+		self.console_area.buffer.cursor_position = len(self.console_area.document.text)
 		get_app().invalidate()
 
 	def firstfocus(self):

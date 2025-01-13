@@ -10,6 +10,7 @@ from prompt_toolkit.layout import (
 	Layout,
 	HSplit,
 	Window,
+	ScrollablePane,
 )
 from prompt_toolkit.layout.controls import FormattedTextControl
 from prompt_toolkit.key_binding import (
@@ -62,9 +63,11 @@ class _Selecter:
 		if self.message=="":inner=[self.command]
 		else               :inner=[self.message_area,self.command]
 
+		
+
 		#総合のlayout
 		layout = HSplit(
-			inner,
+			[ScrollablePane(HSplit(inner))],
 			key_bindings = DynamicKeyBindings(self.main_kb),
 		)
 
@@ -84,6 +87,7 @@ class _Selecter:
 			app.layout = self.layout
 		else:
 			myapp.run(layout=self.layout)
+		app.layout.focus(self.command)
 			
 
 	#keybind{{{
