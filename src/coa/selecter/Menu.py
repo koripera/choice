@@ -65,12 +65,14 @@ class Menu:
 		if type(self._message) == str:
 			self.console_area.text = self._message
 		else:
-			txt = ""
-			tail = self._message()
-			if type(tail)==str:
-				txt += tail
+			stdout = StdoutRedirector()
+			with stdout:
+				tail = self._message()
 
-			self.console_area.text = txt 		
+			if type(tail)==str:
+				stdout.capture += tail
+
+			self.console_area.text = stdout.capture
 
 	#Layout{{{
 	def _make_layout(self):
@@ -214,13 +216,18 @@ class Menu:
 		選択した関数の実行を行う
 		関数の標準出力はMenuのconsole_areaに出力
 		"""
-		with StdoutRedirector(self.console_area):
+		stdout = StdoutRedirector()
+
+		with stdout:
 			try:
 				func()
 			except BaseException as e:
 				print(e)
 
-		get_app().invalidate()#再描画
+		self.message_reset()                     #func後にmessageを更新(funcの更新内容を反映できる)
+		self.console_area.text += stdout.capture #funcそのものの出力を更新
+
+		#get_app().invalidate()#再描画
 
 	def pre_run(self):
 		"""
@@ -265,30 +272,33 @@ class Command:
 
 # 標準出力をリダイレクトするクラス
 class StdoutRedirector:
-    def __init__(self, output_control):
-        self.output_control = output_control
-        self._original_stdout = sys.stdout
-        self.buffer = StringIO()
+	def __init__(self, output_control=None):
+		self.output_control = output_control
+		self._original_stdout = sys.stdout
+		self.buffer = StringIO()
+		self.capture = "" #変数として保存
 
-    def write(self, text):
-        self.buffer.write(text)
-        # スレッドセーフにUIを更新
-        call_soon_threadsafe(lambda: self.update_output(text))
+	def write(self, text):
+		self.buffer.write(text)
+		self.capture += text   #str変数に
+		if self.output_control:
+			# スレッドセーフにUIを更新
+			call_soon_threadsafe(lambda: self.update_output(text))
 
-    def update_output(self, text):
-        # フォーカス可能な出力ウィンドウにテキスト追加
-        self.output_control.text += text
-        get_app().invalidate() #即時更新したいが、意味なさそう
+	def update_output(self, text):
+		# フォーカス可能な出力ウィンドウにテキスト追加
+		self.output_control.text += text
+		get_app().invalidate() #即時更新したいが、意味なさそう
 
-    def flush(self):
-        self.buffer.flush()
+	def flush(self):
+		self.buffer.flush()
 
-    def __enter__(self):
-        sys.stdout = self
-        return self
+	def __enter__(self):
+		sys.stdout = self
+		return self
 
-    def __exit__(self, exc_type, exc_value, traceback):
-        sys.stdout = self._original_stdout
+	def __exit__(self, exc_type, exc_value, traceback):
+		sys.stdout = self._original_stdout
 
 class Row:
 #最終は__pt_container__で返すものでappに登録される。
