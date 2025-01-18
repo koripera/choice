@@ -53,7 +53,7 @@ class Menu:
 
 		#self.label --文字の表示領域
 		#情報を表示するlayout
-		self.console_area = TextArea(text="aaa")
+		self.console_area = TextArea(text="")
 		self.message_area = Label(text=self.message)
 		
 		self.info_area = [
@@ -187,7 +187,10 @@ class Menu:
 
 	async def execute(self,func):
 		with StdoutRedirector(self.console_area):
-			func()
+			try:
+				func()
+			except BaseException as e:
+				print(e)
 		lines = self.console_area.document.text.splitlines()
 		self.console_area.buffer.cursor_position = len(self.console_area.document.text)
 		get_app().invalidate()
