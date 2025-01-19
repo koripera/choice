@@ -1,7 +1,9 @@
+import traceback
 from io import StringIO
 import sys
 import asyncio
 import threading
+
 from typing import Self,Any,Callable
 
 from prompt_toolkit.application import Application
@@ -27,8 +29,10 @@ from prompt_toolkit.widgets import (
 	TextArea,
 )
 
-from prompt_toolkit.eventloop import call_soon_threadsafe
 
+
+from .row import Row
+from .stdoutredirector import StdoutRedirector
 
 class Menu:
 	"""
@@ -38,13 +42,15 @@ class Menu:
 		self,
 		items        : list[ tuple[ str,type[Self] | Callable[..., Any] ] ],      
 		message      : str = "",
+		console      : bool = True,
 		)           -> None:
 	
 		self.base_items     = items   #基本となるｺﾏﾝﾄﾞ名とｺﾏﾝﾄﾞ
 		self.display_items  = items   #表示用のｺﾏﾝﾄﾞ名とｺﾏﾝﾄﾞ
 		self._message       = message #ｺﾝｿｰﾙ部に表示されるstrまたは表示を行う関数
-		self.previous_menu  = None    #
-		self._layout        = None    #
+		self.previous_menu  = None    #直前Menuのｲﾝｽﾀﾝｽ
+		self._layout        = None    #基本となるLayout
+		self.console        = console #関数のprint,returnを表示するか
 
 		self._make_layout()           #基本layout作成
 
@@ -54,7 +60,7 @@ class Menu:
 			self._selecter_keys(),
 		]
 		
-		self.mainindex = 1 #
+		self.mainindex = 1 #ｺﾝｿｰﾙ･選択部の切り替え
 		self.rowindex  = 0 #選択肢の選択行
 
 	def message_reset(self):
@@ -87,7 +93,7 @@ class Menu:
 
 		#情報を表示するlayout
 		self.console_area = TextArea(text="")
-		
+
 		self.info_area = HSplit([
 			self.console_area,
 			HorizontalLine(),
@@ -102,6 +108,11 @@ class Menu:
 			[self.info_area,self.command_area],
 			key_bindings = DynamicKeyBindings(self.main_kb),
 		)
+
+		#出力表示しないなら切り替え
+		if not self.console:		
+			self.console_area.dont_extend_height = True
+			self.command_area.height=None
 
 		#self.layout --app上の構成
 		self._layout = Layout(layout,focused_element=self.rowlist[0])
@@ -193,9 +204,6 @@ class Menu:
 
 			#中身が関数等
 			elif callable( (select_func:= select_item) ):
-				#self.console_area.text=self.message #基本のﾒｯｾｰｼﾞに戻す
-				self.message_reset()
-
 				#ｽﾚｯﾄﾞで裏側で起動する、menuの操作を継続して可能にして強制終了できる
 				#selecter,inputerも関数扱い、メインスレッドのApplicationが止まると動作不能になる
 				loop = asyncio.new_event_loop()
@@ -216,20 +224,29 @@ class Menu:
 		選択した関数の実行を行う
 		関数の標準出力はMenuのconsole_areaに出力
 		"""
-		stdout = StdoutRedirector()
 
-		with stdout:
+		if self.console:
+			stdout = StdoutRedirector()
+			tail=None
+
+			with stdout:
+				try:
+					tail = func()
+				except BaseException as e:
+					print(traceback.format_exc())
+
+			self.message_reset()                     #func後にmessageを更新(funcの更新内容を反映できる)
+			self.console_area.text += stdout.capture #funcそのものの出力を更新
+			if type(tail) == str:
+				self.console_area.text += tail       #funcのreturnも文字表現可能なら更新
+
+			get_app().invalidate()#再描画
+		else:
 			try:
-				tail = func()
-			except BaseException as e:
-				print(e)
-
-		self.message_reset()                     #func後にmessageを更新(funcの更新内容を反映できる)
-		self.console_area.text += stdout.capture #funcそのものの出力を更新
-		if type(tail) == str:
-			self.console_area.text += tail       #funcのreturnも文字表現可能なら更新
-
-		#get_app().invalidate()#再描画
+				func()
+			except:
+				pass
+			self.message_reset()
 
 	def pre_run(self):
 		"""
@@ -272,55 +289,5 @@ class Command:
 		"""
 		get_app().layout = menu.previous_menu.layout
 
-# 標準出力をリダイレクトするクラス
-class StdoutRedirector:
-	def __init__(self, output_control=None):
-		self.output_control = output_control
-		self._original_stdout = sys.stdout
-		self.buffer = StringIO()
-		self.capture = "" #変数として保存
 
-	def write(self, text):
-		self.buffer.write(text)
-		self.capture += text   #str変数に
-		if self.output_control:
-			# スレッドセーフにUIを更新
-			call_soon_threadsafe(lambda: self.update_output(text))
-
-	def update_output(self, text):
-		# フォーカス可能な出力ウィンドウにテキスト追加
-		self.output_control.text += text
-		get_app().invalidate() #即時更新したいが、意味なさそう
-
-	def flush(self):
-		self.buffer.flush()
-
-	def __enter__(self):
-		sys.stdout = self
-		return self
-
-	def __exit__(self, exc_type, exc_value, traceback):
-		sys.stdout = self._original_stdout
-
-class Row:
-#最終は__pt_container__で返すものでappに登録される。
-	def __init__(self,text: str,) -> None:
-		self.text = str(text) if not callable(text) else text.__name__
-		self.control = FormattedTextControl(
-			self.text,
-			focusable=True,
-		)
-
-		def get_style() -> str:
-			if get_app().layout.has_focus(self):
-				return "reverse"
-			else:
-				return ""
-
-		self.window = Window(
-			self.control, height=1, style=get_style, always_hide_cursor=True
-		)
-
-	def __pt_container__(self) -> Window:
-		return self.window
 

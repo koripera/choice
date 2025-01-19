@@ -34,9 +34,11 @@ def submenu():
 
 	message = "This is not a function or a menu, so selecting it will do nothing."
 
-	menu = Menu(items,message)
+	menu = Menu(items,message,console=False)
 
 	return menu
+
+
 
 def input_print():
 	message = "input the text and press Enter"
@@ -58,7 +60,6 @@ def select_print():
 	message = "Select and press Enter"
 
 	res = selecter(items,message)
-
 
 	print( f"print in a function : {res}")
 	return f"return value        : {res}"

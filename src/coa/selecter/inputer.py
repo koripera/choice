@@ -26,8 +26,6 @@ from prompt_toolkit.widgets import (
 	TextArea,
 )
 
-from . import myapp
-
 import threading
 
 #入力valを返す
@@ -59,23 +57,23 @@ class _Inputer:
 			focusable=False,
 			wrap_lines=True,
 			read_only=True,
-			height=2,
+			dont_extend_height=True,
 		)
     
 		#入力を受け付けるエリア
 		self.input_area = TextArea(
-			height=3,
 			prompt="> ",
 			multiline=False,
 			focusable=True,
-			wrap_lines=False
+			wrap_lines=False,
+			dont_extend_height=True,
 		)
 
 		#最終のﾚｲｱｳﾄ		
 		self.layout = Layout(
 			HSplit([
 				output_area, 
-				Window(height=1, char="-"),
+				HorizontalLine(),
 				self.input_area,
 			],
 			key_bindings = DynamicKeyBindings(self.main_kb),
@@ -141,48 +139,4 @@ class _Inputer:
 	#}}}keybind
 
 
-
-
-# 標準出力をリダイレクトするクラス
-class StdoutRedirector:
-    def __init__(self, output_control):
-        self.output_control = output_control
-        self._original_stdout = sys.stdout
-        self.buffer = StringIO()
-
-    def write(self, text):
-        self.buffer.write(text)
-        self.output_control.text += text  # フォーカス可能な出力ウィンドウにテキスト追加
-
-    def flush(self):
-        self.buffer.flush()
-
-    def __enter__(self):
-        sys.stdout = self
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        sys.stdout = self._original_stdout
-
-class Row:
-#最終は__pt_container__で返すものでappに登録される。
-	def __init__(self,text: str,) -> None:
-		self.text = str(text) if not callable(text) else text.__name__
-		self.control = FormattedTextControl(
-			self.text,
-			focusable=True,
-		)
-
-		def get_style() -> str:
-			if get_app().layout.has_focus(self):
-				return "reverse"
-			else:
-				return ""
-
-		self.window = Window(
-			self.control, height=1, style=get_style, always_hide_cursor=True
-		)
-
-	def __pt_container__(self) -> Window:
-		return self.window
 
