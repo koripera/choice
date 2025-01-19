@@ -220,12 +220,14 @@ class Menu:
 
 		with stdout:
 			try:
-				func()
+				tail = func()
 			except BaseException as e:
 				print(e)
 
 		self.message_reset()                     #func後にmessageを更新(funcの更新内容を反映できる)
 		self.console_area.text += stdout.capture #funcそのものの出力を更新
+		if type(tail) == str:
+			self.console_area.text += tail       #funcのreturnも文字表現可能なら更新
 
 		#get_app().invalidate()#再描画
 
